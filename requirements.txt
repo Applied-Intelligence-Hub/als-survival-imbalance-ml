@@ -1,0 +1,11 @@
+# The original analysis environment was not frozen; these are dependency names.
+numpy
+pandas
+scipy
+scikit-learn
+imbalanced-learn
+lightgbm
+optuna
+shap
+matplotlib
+joblib
