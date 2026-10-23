@@ -1,7 +1,5 @@
 # ALS Survival Prognosis and Class Imbalance
 
-Code for **Study II** of Ivo Nunes Camacho's MSc dissertation, *Explainable and Reproducible Machine Learning for ALS Prognosis: Functional Progression Classification and Survival Prediction*, supervised by Maryam Abbasi and Pedro Martins at the Polytechnic University of Santarem.
-
 The study partially replicates and extends the framework of [Papaiz et al. (2024)](https://doi.org/10.1186/s12911-024-02484-5) for identifying patients who die within 24 months of symptom onset. It compares imbalance strategies, tests BalancedBagging, and examines why high ROC-AUC can coexist with very low sensitivity at the default threshold.
 
 ![Study II pipeline](assets/experimental_pipeline.png)
@@ -178,10 +176,6 @@ PRO-ACT combines de-identified records from completed clinical trials. This stud
 The repository distributes code and selected published figures. It excludes original data, patient-level derived tables, train/test arrays, individual predictions, SHAP matrices and fitted models. The code licence does not authorise redistribution of PRO-ACT records.
 
 Complete-case selection, the timing of the trial assessments, the onset-based target and the small minority-class test sample constrain generalisation. These models require an explicit prediction time, independent external validation and prospective assessment before clinical use.
-
-## Provenance, companion study and licence
-
-The primary scripts come from the [dissertation repository](https://github.com/NotAnnieMore/ALSThesis) at commit `6e54223`. Threshold and bootstrap scripts are recovered from the original Study II working directory and aligned with the corrected training-only preprocessing protocol. Standalone path fixes and local probability export complete their dependencies.
 
 The reference framework is Papaiz et al., *Ensemble-imbalance-based classification for amyotrophic lateral sclerosis prognostic prediction: identifying short-survival patients at diagnosis*, BMC Medical Informatics and Decision Making 24, 80 (2024), [doi:10.1186/s12911-024-02484-5](https://doi.org/10.1186/s12911-024-02484-5).
 
