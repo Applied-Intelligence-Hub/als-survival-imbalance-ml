@@ -65,7 +65,7 @@ The original dissertation stores these scripts under `replication/`. This standa
 
 ## Installation
 
-Use Python 3.10 or later. From the repository root:
+Use Python 3.12 (verified locally with 3.12.10). From the repository root:
 
 ```bash
 python -m venv .venv
@@ -75,7 +75,7 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-The original analysis environment was not frozen. The requirements file lists the dependencies without invented version pins. Regenerated numerical estimates can vary across package versions and platforms.
+The original analysis environment was not frozen as a historical lock. Core dependencies in `requirements.txt` are pinned to the Python 3.12.10 environment inspected on 23 October 2026; its complete installed-package inventory is in `requirements-verified.txt`. This is also the environment used for the supplementary fixed-configuration bagging discrimination check. It does not establish the exact environment at the time of every original run, or guarantee identical numerical estimates across platforms. Retain the original data extract, row order, partition definitions, and seeds when checking reproduction.
 
 ## Primary analysis
 
@@ -128,6 +128,48 @@ python 02_scripts/step11_missing_data_sensitivity.py
 ```
 
 This separate post-hoc analysis retains the 5,802 outcome-eligible patients, uses a new stratified split, and compares median imputation with five stochastic iterative imputations using the selected LightGBM+ROS hyperparameters. Imputation, scaling and oversampling are fitted on training data only. Its test patients differ from those in the complete-case analysis, so the estimates are descriptive rather than paired comparisons. This script does not replace or re-optimise the primary cohort.
+
+## Reviewer follow-up checks
+
+After the primary analysis, run these supplementary checks from the repository root:
+
+```bash
+python 02_scripts/reviewer_followup.py
+python 02_scripts/step13_bagging_discrimination.py
+```
+
+The first script validates the local Step 6 probability export against the saved
+test labels, confusion matrices and ROC-AUCs before computing average precision,
+Brier scores, reliability plots and descriptive calibration diagnostics. It also
+compares complete and incomplete cases, audits the onset-to-trial reference time
+by outcome, checks unrecognised onset text, and compares LightGBM/SVM sensitivity
+using paired test predictions. It uses 2,000 bootstrap resamples by default and
+does not refit models or recalibrate probabilities. Optional `--project-root`,
+`--probabilities`, `--output` and `--bootstrap` arguments are available. Assertions
+check the original study cohort, not an arbitrary new data extract.
+
+Step 13 repeats the original 15 development folds with the saved no-resampling
+hyperparameters, comparing single classifiers with ten-estimator BalancedBagging.
+It reports both ROC-AUC and balanced accuracy, records convergence warnings and
+does not silently replace a failed fit with a score. It uses no test observations
+and performs no new Optuna search. Outputs from both commands remain local in
+`03_outputs/reviewer_followup/`. The supplementary balanced-accuracy means matched
+all 14 original single/bagging means to numerical precision in the inspected runtime.
+
+The timing audit found that 756 of 1,328 Standard Survival participants had a
+source-trial reference time at or beyond 24 months after symptom onset. That
+reference is an entry-time proxy, not a verified individual enrolment date. The
+audit identifies a substantial left-truncation concern; it does not correct it.
+No entry-restricted or delayed-entry survival analysis is claimed. BalancedBagging
+gains at the default operating point should not be read as uniformly improved
+ranking, and oversampled-model probabilities are not calibrated clinical risks.
+The reference ensembles also used ten selected configurations, rather than ten
+bags of one configuration as here.
+
+Saved historical trial means cannot establish whether any individual Study II
+fold used the original AUC-0.5 failure fallback; a historical fold-level failure
+ledger was not available. Current dependency pins and new checks do not reconstruct
+that missing historical record.
 
 ## Data use and limitations
 
