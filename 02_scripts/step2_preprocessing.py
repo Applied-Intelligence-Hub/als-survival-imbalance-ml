@@ -83,7 +83,7 @@ def extract_site(row):
             return 'Limb_and_Bulbar'
         if 'Other' in text:
             return 'Other'
-        return 'Limb/Spinal'  # default for unknown text patterns
+        return np.nan  # Unrecognised text is not evidence of limb/spinal onset.
     # Binary columns fallback (only when text column is NaN)
     binary_map = {
         'Site_of_Onset___Bulbar': 'Bulbar',

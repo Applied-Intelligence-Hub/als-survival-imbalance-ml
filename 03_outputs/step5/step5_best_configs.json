@@ -1,0 +1,76 @@
+{
+  "KNN": {
+    "imbalance_technique": "RUS",
+    "best_params": {
+      "n_neighbors": 31,
+      "weights": "distance",
+      "metric": "manhattan"
+    },
+    "mean_auc": 0.8801
+  },
+  "NaiveBayes": {
+    "imbalance_technique": "None",
+    "best_params": {
+      "var_smoothing": 0.0006039330077001364
+    },
+    "mean_auc": 0.8909
+  },
+  "DecisionTree": {
+    "imbalance_technique": "TomekLinks",
+    "best_params": {
+      "criterion": "gini",
+      "max_depth": 29,
+      "min_samples_split": 2,
+      "min_samples_leaf": 17
+    },
+    "mean_auc": 0.8607
+  },
+  "RandomForest": {
+    "imbalance_technique": "None",
+    "best_params": {
+      "n_estimators": 500,
+      "criterion": "entropy",
+      "max_depth": 11,
+      "min_samples_split": 15,
+      "min_samples_leaf": 1
+    },
+    "mean_auc": 0.9064
+  },
+  "SVM": {
+    "imbalance_technique": "SMOTEENN",
+    "best_params": {
+      "kernel": "linear",
+      "C": 0.5279144718888689
+    },
+    "mean_auc": 0.9111
+  },
+  "MLP": {
+    "imbalance_technique": "None",
+    "best_params": {
+      "activation": "tanh",
+      "solver": "adam",
+      "alpha": 0.0607869629312518,
+      "learning_rate": "adaptive",
+      "hidden_layer_sizes": [
+        172
+      ],
+      "max_iter": 1000
+    },
+    "mean_auc": 0.9151
+  },
+  "LightGBM": {
+    "imbalance_technique": "ROS",
+    "best_params": {
+      "n_estimators": 300,
+      "max_depth": 3,
+      "learning_rate": 0.023969419126299827,
+      "num_leaves": 92,
+      "min_child_samples": 26,
+      "subsample": 0.9643397329431174,
+      "colsample_bytree": 0.8889178295307477,
+      "reg_alpha": 6.094221807170998e-07,
+      "reg_lambda": 0.00010083474720770507
+    },
+    "mean_auc": 0.9137
+  }
+}

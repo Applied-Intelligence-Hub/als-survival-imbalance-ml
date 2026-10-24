@@ -238,3 +238,9 @@ models/
 *.pickle
 Thumbs.db
 .DS_Store
+
+# Public selected configurations and aggregate search summaries, not predictions.
+!03_outputs/step5/
+03_outputs/step5/*
+!03_outputs/step5/step5_best_configs.json
+!03_outputs/step5/step5_cv_results.csv

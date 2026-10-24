@@ -10,3 +10,4 @@ optuna==4.8.0
 shap==0.51.0
 matplotlib==3.10.8
 joblib==1.5.3
+threadpoolctl==3.6.0

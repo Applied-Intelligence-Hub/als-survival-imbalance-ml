@@ -19,12 +19,15 @@ Modifications from Papaiz et al. (2024):
 """
 
 import pandas as pd
+import csv
 import numpy as np
 import os
 import sys
 import json
 import time
+import traceback
 import warnings
+from datetime import datetime, timezone
 import optuna
 
 from sklearn.model_selection import RepeatedStratifiedKFold
@@ -49,8 +52,8 @@ from imblearn.under_sampling import (
 )
 from imblearn.combine import SMOTETomek, SMOTEENN
 
-# Suppress warnings
-warnings.filterwarnings('ignore')
+# Keep convergence and input warnings visible in future runs.
+warnings.filterwarnings('default')
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 # ── Configuration ──────────────────────────────────────────────────────────
@@ -207,10 +210,9 @@ def make_sampler(name):
 
 def compute_fold_metrics(y_true, y_pred, y_prob):
     """Compute all metrics for one fold."""
-    try:
-        auc = roc_auc_score(y_true, y_prob)
-    except ValueError:
-        auc = 0.5
+    auc = roc_auc_score(y_true, y_prob)
+    if not np.isfinite(auc):
+        raise ValueError("Undefined fold ROC-AUC")
     f1 = f1_score(y_true, y_pred, pos_label=1, zero_division=0)
     prec = precision_score(y_true, y_pred, pos_label=1, zero_division=0)
     rec = recall_score(y_true, y_pred, pos_label=1, zero_division=0)     # sensitivity
@@ -220,14 +222,36 @@ def compute_fold_metrics(y_true, y_pred, y_prob):
             'recall': rec, 'specificity': spec, 'gmean': gmean}
 
 
-def run_cv(clf_name, params, sampler_name, X, y, return_all=False):
+def record_failure(clf_name, sampler_name, fold, phase, trial_number=None):
+    record = {'classifier': clf_name, 'imbalance_technique': sampler_name,
+              'fold': fold, 'phase': phase, 'trial': trial_number,
+              'recorded_utc': datetime.now(timezone.utc).isoformat(),
+              'traceback': traceback.format_exc()}
+    with open(os.path.join(OUT_DIR, 'step5_failures.jsonl'), 'a', encoding='utf-8') as stream:
+        stream.write(json.dumps(record) + '\n')
+
+
+def record_fold(clf_name, sampler_name, trial, fold, phase, metrics):
+    path = os.path.join(OUT_DIR, 'step5_fold_metrics.csv')
+    row = {'classifier': clf_name, 'imbalance_technique': sampler_name,
+           'trial': trial, 'fold': fold, 'phase': phase, **metrics}
+    exists = os.path.exists(path) and os.path.getsize(path) > 0
+    with open(path, 'a', newline='', encoding='utf-8') as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(row))
+        if not exists:
+            writer.writeheader()
+        writer.writerow(row)
+
+
+def run_cv(clf_name, params, sampler_name, X, y, return_all=False, trial_number=None,
+           evaluation_phase='optimisation'):
     """Run RepeatedStratifiedKFold CV and return mean AUC (or all metrics)."""
     cv = RepeatedStratifiedKFold(n_splits=N_SPLITS, n_repeats=N_REPEATS,
                                  random_state=RANDOM_STATE)
     sampler = make_sampler(sampler_name)
     fold_metrics = []
 
-    for train_idx, val_idx in cv.split(X, y):
+    for fold, (train_idx, val_idx) in enumerate(cv.split(X, y)):
         X_tr, X_val = X[train_idx], X[val_idx]
         y_tr, y_val = y[train_idx], y[val_idx]
 
@@ -241,28 +265,24 @@ def run_cv(clf_name, params, sampler_name, X, y, return_all=False):
             try:
                 X_tr, y_tr = sampler.fit_resample(X_tr, y_tr)
             except Exception:
-                # If resampling fails, skip this fold
-                fold_metrics.append({'auc': 0.5, 'f1': 0, 'precision': 0,
-                                     'recall': 0, 'specificity': 0, 'gmean': 0})
-                continue
+                record_failure(clf_name, sampler_name, fold, 'resampling', trial_number)
+                raise
 
         clf = make_classifier(clf_name, params)
         try:
             clf.fit(X_tr, y_tr)
             y_prob = clf.predict_proba(X_val)[:, 1]
             y_pred = clf.predict(X_val)
+            metrics = compute_fold_metrics(y_val, y_pred, y_prob)
         except Exception:
-            fold_metrics.append({'auc': 0.5, 'f1': 0, 'precision': 0,
-                                 'recall': 0, 'specificity': 0, 'gmean': 0})
-            continue
+            record_failure(clf_name, sampler_name, fold, 'fit_predict_score', trial_number)
+            raise
 
-        fold_metrics.append(compute_fold_metrics(y_val, y_pred, y_prob))
+        fold_metrics.append(metrics)
+        record_fold(clf_name, sampler_name, trial_number, fold, evaluation_phase, metrics)
 
     if not fold_metrics:
-        if return_all:
-            return {m: 0.0 for m in ['auc', 'f1', 'precision', 'recall',
-                                      'specificity', 'gmean']}, {}
-        return 0.5
+        raise RuntimeError("Cross-validation produced no valid folds")
 
     results = {}
     stds = {}
@@ -284,7 +304,7 @@ def create_objective(clf_name, sampler_name, X, y):
     """Create an Optuna objective function for a given combination."""
     def objective(trial):
         params = SUGGEST_FN[clf_name](trial)
-        auc = run_cv(clf_name, params, sampler_name, X, y)
+        auc = run_cv(clf_name, params, sampler_name, X, y, trial_number=trial.number)
         return auc
     return objective
 
@@ -327,6 +347,7 @@ if __name__ == '__main__':
         # Drop duplicates from earlier interrupted runs (keep latest)
         prev = prev.drop_duplicates(subset=['classifier', 'imbalance_technique'],
                                     keep='last').reset_index(drop=True)
+        prev = prev.loc[prev['n_trials'].gt(0) & prev['best_trial'].ge(0)].copy()
         all_results = prev.to_dict('records')
         done_combos = set(zip(prev['classifier'], prev['imbalance_technique']))
         print(f"\nResuming: {len(done_combos)} combinations already completed")
@@ -350,32 +371,19 @@ if __name__ == '__main__':
             study = optuna.create_study(
                 direction='maximize',
                 sampler=optuna.samplers.TPESampler(seed=RANDOM_STATE),
-                pruner=optuna.pruners.MedianPruner(n_startup_trials=10),
             )
             objective = create_objective(clf_name, imb_name, X_train, y_train)
 
             try:
                 study.optimize(objective, n_trials=N_TRIALS, show_progress_bar=False)
-            except Exception as e:
-                print(f"  ⚠ Optimization failed: {e}")
-                # Record failure
-                row = {
-                    'classifier': clf_name,
-                    'imbalance_technique': imb_name,
-                    'n_trials': 0,
-                    'best_trial': -1,
-                    'mean_auc': 0.0, 'std_auc': 0.0,
-                    'mean_f1': 0.0, 'std_f1': 0.0,
-                    'mean_gmean': 0.0, 'std_gmean': 0.0,
-                    'mean_precision': 0.0, 'std_precision': 0.0,
-                    'mean_recall': 0.0, 'std_recall': 0.0,
-                    'mean_specificity': 0.0, 'std_specificity': 0.0,
-                    'best_params': '{}',
-                    'time_seconds': time.time() - t0,
-                }
-                all_results.append(row)
-                pd.DataFrame(all_results).to_csv(RESULTS_CSV, index=False)
-                continue
+            except Exception:
+                record_failure(clf_name, imb_name, None, 'optimisation')
+                study.trials_dataframe().to_csv(
+                    os.path.join(OUT_DIR, f'{clf_name}_{imb_name}_trials.csv'), index=False)
+                raise
+
+            study.trials_dataframe().to_csv(
+                os.path.join(OUT_DIR, f'{clf_name}_{imb_name}_trials.csv'), index=False)
 
             best_params = study.best_trial.params
             # Re-construct full params for classifier (handle MLP layers)
@@ -388,7 +396,9 @@ if __name__ == '__main__':
 
             # Full evaluation with all metrics
             means, stds = run_cv(clf_name, best_params, imb_name,
-                                 X_train, y_train, return_all=True)
+                                 X_train, y_train, return_all=True,
+                                 trial_number=study.best_trial.number,
+                                 evaluation_phase='selected_configuration')
 
             elapsed = time.time() - t0
 

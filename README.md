@@ -54,7 +54,7 @@ TreeSHAP for LightGBM and KernelSHAP for MLP both ranked diagnostic delay first.
   interim/           Reconstructed feature and outcome tables
   processed/         Coded data, train/test partitions and local arrays
 02_scripts/          Numbered analysis and figure-generation scripts
-03_outputs/          Generated results, figures and local probability files
+03_outputs/          Published search summaries/configurations; other outputs stay local
 assets/              Selected published figures used in this README
 requirements.txt     Python dependencies
 ```
@@ -157,17 +157,86 @@ all 14 original single/bagging means to numerical precision in the inspected run
 The timing audit found that 756 of 1,328 Standard Survival participants had a
 source-trial reference time at or beyond 24 months after symptom onset. That
 reference is an entry-time proxy, not a verified individual enrolment date. The
-audit identifies a substantial left-truncation concern; it does not correct it.
-No entry-restricted or delayed-entry survival analysis is claimed. BalancedBagging
-gains at the default operating point should not be read as uniformly improved
-ranking, and oversampled-model probabilities are not calibrated clinical risks.
-The reference ensembles also used ten selected configurations, rather than ten
-bags of one configuration as here.
+primary results remain a retrospective replication reference, not a diagnosis-time
+prediction model. BalancedBagging gains at the default operating point should
+not be read as uniformly improved ranking, and oversampled-model probabilities
+are not calibrated clinical risks. The reference ensembles also used ten selected
+configurations, rather than ten bags of one configuration as here.
+
+The selected configurations in `03_outputs/step5/step5_best_configs.json` and the
+aggregate 70-combination `step5_cv_results.csv` are included. They contain no
+patient records and allow the fixed-parameter checks to reuse the original
+choices without running Optuna again. Original authorised data, unscaled
+partitions and split assignments remain necessary. Do not overwrite these
+reference configurations with new search results when reproducing the checks.
+
+### Temporal and encoding sensitivity
+
+After retaining the original unscaled partitions and selected configurations, run:
+
+```bash
+python 02_scripts/reviewer_temporal_evaluation.py
+python 02_scripts/plot_temporal_sensitivity.py
+python 02_scripts/test_supplementary_revision.py
+```
+
+The temporal evaluator calls `reviewer_temporal_cohorts.py` to reconstruct the
+supplementary cohorts. It keeps the original train/test membership and order,
+seven classifier/resampling configurations, and hyperparameters. Scaling and
+resampling remain training-fold estimates. Thresholds use pooled predictions
+from the 15 development folds; TEST is not used to select them. No new Optuna
+search is performed. The test script uses synthetic fixtures, not a study rerun.
+
+Entry-only restrictions retain the original retrospective predictors, whereas
+landmark tasks include observed survivors and restrict dated measurements,
+height and riluzole to the prediction time. A positive landmark outcome is death
+after that time and by month 24. Static demographic/onset history is assumed
+available rather than independently time-stamped. BMI uses conventional
+left-closed boundaries in the landmark tasks; an isolated BMI-boundary check on
+the original cohort changes two codes without changing the displayed LightGBM
+or MLP ranking scores or native confusion matrices.
+
+| Analysis | Total N | TEST N / events | LightGBM ROC-AUC | MLP ROC-AUC |
+| --- | ---: | ---: | ---: | ---: |
+| Original reference | 1,502 | 301 / 35 | 0.923 | 0.918 |
+| Entry proxy at/before 18 months | 424 | 91 / 34 | 0.828 | 0.823 |
+| Dated 18-month landmark | 161 | 33 / 5 | 0.693 | 0.764 |
+| Entry proxy at/before 12 months | 124 | 28 / 22 | 0.576 | 0.765 |
+
+The changes are not a causal estimate of left-truncation bias: populations,
+prevalences and fitted models differ, and landmarking changes the prediction
+question. Five test events make the 18-month landmark estimates imprecise.
+The 12-month landmark retains only 41 complete cases and cannot support the
+predeclared five-fold design. KNN+RUS also fails in the 12-month entry cohort
+because k=31 exceeds 22 observations after resampling. Neither case receives
+a fallback score or post-hoc retuning. Across feasible tasks, 27 configurations
+complete 432 fits; the final entry-18-month MLP fit has a recorded convergence
+warning under the retained iteration limit.
+
+Aggregate metrics, fold scores, warnings and failure/status records are written
+to `03_outputs/reviewer_followup/revised_analyses/`. Reconstructed patient tables
+and predictions remain in ignored `01_data/interim/reviewer_revision/`.
+Unknown onset text now stays missing instead of silently becoming limb/spinal;
+the current extract had no records taking that old fallback. Missing dated
+riluzole means no recorded timely use, not confirmed absence of treatment.
+
+Selected aggregate results and the thesis timing figure are published below.
+The plotting command reads the aggregate CSVs produced by the evaluator when
+available, or the published JSON otherwise. The original reference intervals
+come from the validated saved probability audit, not a new model fit.
+
+![Temporal sensitivity of the fixed configurations](assets/reviewer_followup/review_s2_timing_sensitivity.png)
+
+[Aggregate results](assets/reviewer_followup/results.json)
 
 Saved historical trial means cannot establish whether any individual Study II
 fold used the original AUC-0.5 failure fallback; a historical fold-level failure
 ledger was not available. Current dependency pins and new checks do not reconstruct
 that missing historical record.
+The revised Step 5 records failures, successful fold metrics and trial exports,
+then stops on errors instead of assigning AUC 0.5. Original searches were not
+repeated. No reliable source-trial ID was reconstructed, and no delayed-entry
+survival model, trial-level validation or clean-environment reproduction is claimed.
 
 ## Data use and limitations
 
